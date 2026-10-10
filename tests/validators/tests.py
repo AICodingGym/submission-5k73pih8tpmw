@@ -368,6 +368,29 @@ class TestSimpleValidators(SimpleTestCase):
         with self.assertRaisesMessage(ValidationError, '"djangoproject.com" has more than 16 characters.'):
             v('djangoproject.com')
 
+    def test_url_validator_query_and_fragment_delimiters_in_userinfo(self):
+        # '?' and '#' end the authority (RFC 3986 section 3.2), so they can't
+        # appear unencoded in the username or password.
+        validator = URLValidator()
+        invalid_urls = (
+            'http://invalid-.com?m=foo@example.com',
+            'http://invalid-.com#foo@example.com',
+            'http://invalid-.com:8080?m=foo@example.com',
+            'http://invalid-.com:8080#foo@example.com',
+            'https://test.[com?m=foo@example.com',
+        )
+        for url in invalid_urls:
+            with self.subTest(url=url), self.assertRaises(ValidationError):
+                validator(url)
+        valid_urls = (
+            'http://example.com?m=foo@example.com',
+            'http://example.com#foo@example.com',
+            'http://userid:password@example.com/?m=foo@example.com',
+        )
+        for url in valid_urls:
+            with self.subTest(url=url):
+                self.assertIsNone(validator(url))
+
 
 test_counter = 0
 for validator, value, expected in TEST_DATA:
