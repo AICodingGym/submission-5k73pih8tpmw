@@ -368,21 +368,35 @@ class TestSimpleValidators(SimpleTestCase):
         with self.assertRaisesMessage(ValidationError, '"djangoproject.com" has more than 16 characters.'):
             v('djangoproject.com')
 
-    def test_url_validator_query_and_fragment_delimiters_in_userinfo(self):
-        # '?' and '#' end the authority (RFC 3986 section 3.2), so they can't
-        # appear unencoded in the username or password.
+    def test_url_validator_rejects_unencoded_userinfo_delimiters(self):
+        # ':', '@', and '/' must be %-encoded in the user and password
+        # (RFC 1738 section 3.1), and '?' and '#' end the authority (RFC 3986
+        # section 3.2). Otherwise an invalid host, path, or query could be
+        # matched as credentials.
         validator = URLValidator()
         invalid_urls = (
+            'http://foo/bar@example.com',
+            'http://foo:bar:baz@example.com',
+            'http://foo:bar@baz@example.com',
+            'http://foo:bar/baz@example.com',
+            'http://invalid-.com/?m=foo@example.com',
             'http://invalid-.com?m=foo@example.com',
             'http://invalid-.com#foo@example.com',
             'http://invalid-.com:8080?m=foo@example.com',
-            'http://invalid-.com:8080#foo@example.com',
-            'https://test.[com?m=foo@example.com',
+            'http://-invalid.com/?m=foo@example.com',
+            'http://inv-.alid-.com/?m=foo@example.com',
+            'http://inv-.-alid.com/?m=foo@example.com',
         )
         for url in invalid_urls:
             with self.subTest(url=url), self.assertRaises(ValidationError):
                 validator(url)
+
+    def test_url_validator_accepts_valid_userinfo(self):
+        validator = URLValidator()
         valid_urls = (
+            'http://userid:@example.com',
+            'http://user%40name:pa%3Ass%2Fword@example.com',
+            "http://-.~_!$&'()*+,;=%40:80%2f@example.com",
             'http://example.com?m=foo@example.com',
             'http://example.com#foo@example.com',
             'http://userid:password@example.com/?m=foo@example.com',
